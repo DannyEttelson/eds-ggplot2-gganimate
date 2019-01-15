@@ -1,0 +1,164 @@
+---
+title: "gganimate workshop"
+author: "Danny Ettelson"
+date: "1/15/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+1. Make your static graphs work well first before you animate before trying to animate
+2. animating can take a long time to render so start with simple animations first
+
+
+rules for successful visuals IN THIS ORDER
+1. correct
+2. clear
+3. looks awesome
+
+```{r lib}
+
+library(tidyverse)
+library(ggridges)
+library(gganimate)
+library(ggrepel)
+library(transformr)
+library(gifski)
+
+
+```
+
+Get Channel Island fox population data and wranlge it
+
+```{r data}
+#gifkey?
+ci_fox_pop <- read_csv("ci_fox_pop.csv")
+# tidy format has year, island name, population, year
+
+#gather population data using gather() in tidyr
+
+fox <- ci_fox_pop %>% 
+  gather(island, pop, san_miguel:san_nicolas)
+
+
+
+
+```
+
+First make a static version of graph and use facet_wrap to view by year
+
+```{r graphs}
+
+#to animaate, we'll use transition_state
+#splits by a variable into states similarly to facet_wrap
+#then it 'tweens (interpolates) between the states
+
+ggplot(fox, aes(x = year, y = pop)) +
+  geom_point(size = 3, aes(color = island)) +
+  facet_wrap(~year) #split into graphs by year
+
+
+```
+
+```{r animate}
+
+ggplot(fox, aes(x = year, y = pop)) +
+  geom_point(size = 3, aes(color = island)) +
+  transition_states(states = year,
+                    transition_length = 1, 
+                    state_length = 1,
+                    wrap = FALSE) +
+  ease_aes('cubic-in-out') +
+  shadow_mark()
+
+
+
+
+#wrap interpolates from first to last point
+```
+
+```{r animate 2}
+
+#transition_reveal for island fox populations
+#allows lines to gradually build up
+#it knows to keep old data for path and polygon layers, to help follow along labels
+fox_line <- ggplot(fox, aes(x = year, y = pop)) +
+  geom_line(size = 1, aes(color = island)) +
+  theme_dark() +
+  transition_reveal(id = island, along = year) +
+  ease_aes('cubic-in-out')
+
+#rendering code
+#animate(fox_line, nframes( = 100), renderer = gifski_renderer(fox_line.gif))
+
+animate(fox_line, nframes = 100, renderer = gifski_renderer("fox_line.gif"))
+
+```
+
+Use starwars dataset to create animated graphics using transition_manual() and transition_layers()
+
+```{r starwars}
+
+#Wrangling
+
+sw <- starwars %>% 
+  filter(species == "Human" |
+           species == "Droid" |
+           species == "Wookiee" |
+           species == "Ewok") %>% 
+  mutate(species = factor(species))
+
+
+sw$species <- fct_relevel(sw$species, "Ewok", "Droid", "Human", "Wookiee")
+  
+
+#transition manual makes states based on what you want if the auto doesn't make sense
+# good for discrete frames where you don't want interpolation
+ggplot(sw, aes(x = height, y = mass, label = name)) +
+  geom_point(aes(color = species)) +
+  geom_text_repel(size = 2, segment.size = 0.2) +
+  labs(title = "Species: {current_frame}") +
+  transition_manual(frames = species)
+
+```
+
+transition_layers: gradually add layers to the plot in the order defined in the code
+
+```{r transition_layers}
+#transitioned line and error
+sw_size <- ggplot(sw, aes(x = height, y = mass)) +
+  geom_point(aes(color = species)) +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_smooth(method = "lm", se = TRUE, color = "NA") +
+  transition_layers(layer_length = 1, transition_length = 2) +
+  enter_fade() +
+  theme_minimal()
+
+animate(sw_size, nframes = 100, renderer = gifski_renderer("sw_size.gif"))
+
+```
+
+Final example: animated ridge plotusing ransition_states with abalone sizes
+
+```{r abalone}
+
+abalone <- read_csv("abalone.csv") %>% 
+  filter(sex == "M" | sex == "F" | sex == "I") %>% 
+  filter(age_years >4 & age_years <25) %>% 
+  mutate(sex = fct_relevel(factor(sex), "I", "F", "M"))
+  
+ggplot(abalone, aes(x = length_mm, y = age_years, fill = sex)) +
+  geom_density_ridges(alpha = 0.5, color = "white") +
+  scale_fill_manual(values = c("purple","blue","cyan")) +
+  transition_states(age_years, transition_length = 1, state_length = 1) +
+  shadow_mark()
+
+```
+
+
+
+
+
+
